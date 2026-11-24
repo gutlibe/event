@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#983417"/>
+      <stop offset="0.45" stop-color="#df5327"/>
+      <stop offset="0.78" stop-color="#f6c3ad"/>
+      <stop offset="1" stop-color="#f8edc9"/>
+    </linearGradient>
+    <linearGradient id="sun" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f8edc9"/>
+      <stop offset="1" stop-color="#d9a521"/>
+    </linearGradient>
+  </defs>
+  <rect width="1600" height="900" fill="url(#sky)"/>
+  <circle cx="800" cy="640" r="210" fill="url(#sun)"/>
+  <g stroke="#1c1812" stroke-opacity="0.25" stroke-width="4">
+    <path d="M0 640h1600"/>
+    <path d="M0 690h1600"/>
+    <path d="M0 745h1600"/>
+    <path d="M0 805h1600"/>
+    <path d="M0 870h1600"/>
+  </g>
+  <g fill="#1c1812" fill-opacity="0.9">
+    <rect x="0" y="560" width="1600" height="340" opacity="0.12"/>
+    <rect x="140" y="430" width="180" height="210" rx="6"/>
+    <rect x="360" y="480" width="120" height="160" rx="6"/>
+    <rect x="1180" y="450" width="160" height="190" rx="6"/>
+    <rect x="1380" y="500" width="100" height="140" rx="6"/>
+  </g>
+  <g fill="#f8edc9" fill-opacity="0.75">
+    <rect x="160" y="455" width="26" height="34" rx="3"/>
+    <rect x="205" y="455" width="26" height="34" rx="3"/>
+    <rect x="250" y="455" width="26" height="34" rx="3"/>
+    <rect x="1200" y="475" width="24" height="32" rx="3"/>
+    <rect x="1240" y="475" width="24" height="32" rx="3"/>
+  </g>
+  <g fill="#1c1812" fill-opacity="0.35">
+    <ellipse cx="800" cy="900" rx="900" ry="120"/>
+  </g>
+</svg>

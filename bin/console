@@ -1,0 +1,254 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+use App\Database;
+use App\Models\Event;
+use App\Reference;
+use App\Services\RegistrationService;
+
+require dirname(__DIR__).'/app/bootstrap.php';
+
+$command = $argv[1] ?? 'help';
+
+switch ($command) {
+    case 'migrate':
+        migrate();
+        echo "Schema applied to ".env('DB_DATABASE').".\n";
+        break;
+
+    case 'seed':
+        seed();
+        break;
+
+    case 'fresh':
+        if (! in_array('--force', $argv, true)) {
+            echo "This drops the app's tables in ".env('DB_DATABASE').". Re-run with --force if you mean it.\n";
+            exit(1);
+        }
+
+        Database::execute('SET FOREIGN_KEY_CHECKS = 0');
+
+        foreach (['registrations', 'events', 'password_resets', 'rate_limits', 'users'] as $table) {
+            Database::execute('DROP TABLE IF EXISTS '.$table);
+        }
+
+        Database::execute('SET FOREIGN_KEY_CHECKS = 1');
+        seed();
+        break;
+
+    case 'send-reminders':
+        $sent = RegistrationService::sendDueReminders();
+        echo "Queued {$sent} reminder email(s).\n";
+        break;
+
+    case 'status':
+        $counts = [
+            'organizers' => Database::value('SELECT COUNT(*) FROM users'),
+            'events' => Database::value('SELECT COUNT(*) FROM events'),
+            'registrations' => Database::value('SELECT COUNT(*) FROM registrations'),
+        ];
+
+        foreach ($counts as $label => $value) {
+            echo str_pad($label, 16).$value."\n";
+        }
+        break;
+
+    default:
+        echo <<<TXT
+        Gather console
+
+          php bin/console migrate           apply the database schema
+          php bin/console seed              create demo organizer, events and guests
+          php bin/console fresh --force     drop app tables, migrate and seed again
+          php bin/console send-reminders    email T-24h reminders (log mailer locally)
+          php bin/console status            quick row counts
+
+        TXT;
+        exit($command === 'help' ? 0 : 1);
+}
+
+function migrate(): void
+{
+    $sql = (string) file_get_contents(base_path('database/schema.sql'));
+
+    foreach (explode(';', $sql) as $statement) {
+        $statement = trim($statement);
+
+        if ($statement === '') {
+            continue;
+        }
+
+        Database::pdo()->exec($statement);
+    }
+}
+
+function seed(): void
+{
+    migrate();
+
+    if ((int) Database::value('SELECT COUNT(*) FROM users') > 0) {
+        echo "Database already contains users — seed skipped.\n";
+
+        return;
+    }
+
+    $organizerId = \App\Models\User::create('Demo Organizer', 'demo@event.test', 'password');
+
+    $now = new DateTimeImmutable('now', new DateTimeZone('UTC'));
+    $zone = new DateTimeZone('Africa/Accra');
+
+    $utc = function (string $local) use ($zone): string {
+        return (new DateTimeImmutable($local, $zone))->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
+    };
+
+    $events = [
+        [
+            'slug' => 'friday-night-jazz',
+            'title' => 'Friday Night Jazz at the Garden',
+            'summary' => 'Live quartet, small plates and a garden full of fairy lights.',
+            'description' => "An easy Friday evening with the Accra Jazz Quartet playing two sets under the trees.\n\nDoors open at 6:30 PM. Bring a light jacket — the garden cools down after sunset. Small plates and drinks are available at the bar; card and mobile money accepted.\n\nThis is a free RSVP event. If your plans change, please cancel so someone on the waitlist can take your seat.",
+            'cover_image' => 'media/cover-jazz.svg',
+            'venue_name' => 'The Garden Studio',
+            'venue_address' => '14 Nkrumah Close, Osu, Accra',
+            'starts_at' => $utc('2026-12-04 19:00'),
+            'ends_at' => $utc('2026-12-04 22:00'),
+            'capacity' => 8,
+            'status' => 'published',
+        ],
+        [
+            'slug' => 'sunset-rooftop-mixer',
+            'title' => 'Sunset Rooftop Mixer',
+            'summary' => 'Designers, founders and curious people. One rooftop, one sunset.',
+            'description' => "A relaxed mixer for people who make things in Accra. Come alone or bring a friend — there will be name tags and enough chairs.\n\nSunset is at 5:48 PM, so arrive early enough to catch it. The bar is open until 9 PM.",
+            'cover_image' => 'media/cover-sunset.svg',
+            'venue_name' => 'Skyline Rooftop',
+            'venue_address' => '8 Liberation Road, Airport Residential, Accra',
+            'starts_at' => $utc('2026-12-12 17:00'),
+            'ends_at' => $utc('2026-12-12 20:30'),
+            'capacity' => 60,
+            'status' => 'published',
+        ],
+        [
+            'slug' => 'creative-market-december',
+            'title' => 'Creative Market: December Edition',
+            'summary' => 'Thirty makers, one courtyard, and the best gifts you will buy this year.',
+            'description' => "Our monthly market returns with ceramics, prints, textiles, candles and small-batch food.\n\nFree entry. Family friendly. The courtyard is step-free, and there is parking on the street.",
+            'cover_image' => 'media/cover-market.svg',
+            'venue_name' => 'Jamestown Café',
+            'venue_address' => '3 High Street, Jamestown, Accra',
+            'starts_at' => $utc('2026-12-20 10:00'),
+            'ends_at' => $utc('2026-12-20 16:00'),
+            'capacity' => 25,
+            'status' => 'published',
+        ],
+        [
+            'slug' => 'founders-breakfast-november',
+            'title' => 'Founders Breakfast — November',
+            'summary' => 'A quiet hour of coffee and honest conversation before the week starts.',
+            'description' => "Ten founders around one long table. No pitches, no slides — just what is working and what is not.",
+            'cover_image' => 'media/cover-breakfast.svg',
+            'venue_name' => 'The Larder',
+            'venue_address' => '22 Oxford Street, Osu, Accra',
+            'starts_at' => $utc('2026-11-14 08:30'),
+            'ends_at' => $utc('2026-11-14 10:00'),
+            'capacity' => 20,
+            'status' => 'published',
+        ],
+        [
+            'slug' => 'new-years-eve-warehouse',
+            'title' => "New Year's Eve Warehouse Party",
+            'summary' => 'Still working on the lineup. Save the date.',
+            'description' => "Draft: waiting on the sound permit and the second DJ confirmation.",
+            'cover_image' => null,
+            'venue_name' => 'Warehouse 7',
+            'venue_address' => 'Tema Harbour Road',
+            'starts_at' => $utc('2026-12-31 21:00'),
+            'ends_at' => $utc('2027-01-01 03:00'),
+            'capacity' => null,
+            'status' => 'draft',
+        ],
+        [
+            'slug' => 'sunrise-rooftop-yoga',
+            'title' => 'Sunrise Rooftop Yoga',
+            'summary' => 'Cancelled — the rooftop is being resurfaced.',
+            'description' => "We had to call this one off while the rooftop is resurfaced. Everyone who registered was emailed.\n\nWe'll be back with a new date in January.",
+            'cover_image' => null,
+            'venue_name' => 'Skyline Rooftop',
+            'venue_address' => '8 Liberation Road, Airport Residential, Accra',
+            'starts_at' => $utc('2026-12-06 06:00'),
+            'ends_at' => $utc('2026-12-06 07:30'),
+            'capacity' => 20,
+            'status' => 'cancelled',
+        ],
+    ];
+
+    $eventIds = [];
+
+    foreach ($events as $event) {
+        $event['user_id'] = $organizerId;
+        $event['timezone'] = $event['timezone'] ?? 'Africa/Accra';
+        $event['published_at'] = $event['status'] === 'published' ? $now->format('Y-m-d H:i:s') : null;
+        $eventIds[$event['slug']] = Event::create($event);
+    }
+
+    $guests = [
+        ['Ama Mensah', 'ama@example.com', '+233 24 000 0001'],
+        ['Kwame Boateng', 'kwame@example.com', '+233 24 000 0002'],
+        ['Efua Owusu', 'efua@example.com', '+233 24 000 0003'],
+        ['Kofi Asante', 'kofi@example.com', null],
+        ['Abena Osei', 'abena@example.com', '+233 24 000 0004'],
+        ['Yaw Darko', 'yaw@example.com', null],
+        ['Akosua Frimpong', 'akosua@example.com', '+233 24 000 0005'],
+        ['Kojo Antwi', 'kojo@example.com', null],
+        ['Esi Appiah', 'esi@example.com', '+233 24 000 0006'],
+        ['Nana Addai', 'nana@example.com', null],
+        ['Adjoa Sarpong', 'adjoa@example.com', '+233 24 000 0007'],
+        ['Kwesi Annan', 'kwesi@example.com', null],
+    ];
+
+    $registrations = [
+        ['friday-night-jazz', 0, 'confirmed', 0],
+        ['friday-night-jazz', 1, 'confirmed', 1],
+        ['friday-night-jazz', 2, 'confirmed', 2],
+        ['friday-night-jazz', 3, 'confirmed', 3],
+        ['friday-night-jazz', 4, 'confirmed', 4],
+        ['friday-night-jazz', 5, 'confirmed', 5],
+        ['friday-night-jazz', 6, 'confirmed', 6],
+        ['friday-night-jazz', 7, 'confirmed', 7],
+        ['friday-night-jazz', 8, 'waitlisted', 8],
+        ['friday-night-jazz', 9, 'waitlisted', 9],
+        ['sunset-rooftop-mixer', 0, 'confirmed', 10],
+        ['sunset-rooftop-mixer', 2, 'confirmed', 11],
+        ['sunset-rooftop-mixer', 4, 'confirmed', 12],
+        ['creative-market-december', 1, 'confirmed', 13],
+        ['creative-market-december', 3, 'confirmed', 14],
+        ['creative-market-december', 5, 'confirmed', 15],
+        ['creative-market-december', 11, 'confirmed', 16],
+        ['founders-breakfast-november', 0, 'confirmed', 17],
+        ['founders-breakfast-november', 6, 'confirmed', 18],
+        ['founders-breakfast-november', 8, 'confirmed', 19],
+        ['founders-breakfast-november', 10, 'confirmed', 20],
+        ['founders-breakfast-november', 11, 'confirmed', 21],
+        ['sunrise-rooftop-yoga', 3, 'confirmed', 22],
+        ['sunrise-rooftop-yoga', 5, 'confirmed', 23],
+    ];
+
+    foreach ($registrations as [$slug, $guestIndex, $status, $minutesAgo]) {
+        [$name, $email, $phone] = $guests[$guestIndex];
+        $createdAt = $now->modify('-'.(30 - $minutesAgo).' minutes')->format('Y-m-d H:i:s');
+        $checkedIn = $slug === 'founders-breakfast-november'
+            ? (new DateTimeImmutable('2026-11-14 08:10', $zone))->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s')
+            : null;
+
+        Database::execute(
+            'INSERT INTO registrations (event_id, reference, name, email, phone, status, checked_in_at, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [$eventIds[$slug], Reference::make(), $name, $email, $phone, $status, $checkedIn, $createdAt, $createdAt]
+        );
+    }
+
+    echo "Seeded demo organizer, 5 events and 22 registrations.\n";
+    echo "Sign in at /login with demo@event.test / password.\n";
+}
