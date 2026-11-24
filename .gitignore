@@ -1,0 +1,10 @@
+/.env
+/node_modules
+/public/build
+/storage/logs/*
+!/storage/logs/.gitkeep
+/storage/cache/*
+!/storage/cache/.gitkeep
+/public/uploads/covers/*
+!/public/uploads/covers/.gitkeep
+.DS_Store
